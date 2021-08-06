@@ -87,7 +87,7 @@ module.exports.post = async (event) => {
       Bucket: imageBucketName,
       Key: imageFilename,
       Body: request.files[0].content,
-      ContentType: 'image/jpeg',
+      ContentType: 'image/jpeg', // ここ手抜きポイント
       ACL: 'public-read',
     }).promise();
     imageUrl = `https://${imageBucketName}.s3-ap-northeast-1.amazonaws.com/${imageFilename}`;
