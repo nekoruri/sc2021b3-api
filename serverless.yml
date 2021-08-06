@@ -19,6 +19,11 @@ provider:
             - dynamodb:UpdateItem
             - dynamodb:DeleteItem
           Resource: arn:aws:dynamodb:*:*:table/*
+        - Effect: 'Allow'
+          Action:
+            - s3:putObject
+            - s3:putObjectAcl
+          Resource: arn:aws:s3:::sc2021b3-demoapp-0000/*
   httpApi:
     cors: true
     authorizers:
@@ -63,3 +68,12 @@ resources:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
         TableName: posts
+    ImageS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: 'sc2021b3-demoapp-0000'
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders: ["*"]
+              AllowedMethods: ["GET", "PUT", "HEAD"]
+              AllowedOrigins: ["*"]

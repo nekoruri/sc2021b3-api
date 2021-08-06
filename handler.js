@@ -2,7 +2,12 @@
 const fetch = require('node-fetch');
 const AWS = require('aws-sdk');
 const dynamodb = new AWS.DynamoDB.DocumentClient();
+const s3 = new AWS.S3();
+const parser = require('lambda-multipart-parser');
 
+const imageBucketName = 'sc2021b3-demoapp-0000';
+
+// Auth0のuserinfoエンドポイントからユーザ情報を取得
 const getUserinfo = async (event) => {
   const userinfoUrl = 'https://dev-9zllcerz.us.auth0.com/userinfo';
 
@@ -21,6 +26,9 @@ const getUserinfo = async (event) => {
   }
 };
 
+// GET /
+// 指定されたユーザの新着投稿一覧を表示するAPI
+// 対象はクエリ文字列 user で指定するが、省略した場合はログインユーザ
 module.exports.get = async (event) => {
   const userinfo = await getUserinfo(event);
 
@@ -37,6 +45,8 @@ module.exports.get = async (event) => {
     Limit: 10,
     ReturnConsumedCapacity: 'INDEXES',
   }).promise());
+
+  // 消費したCapacityをログ出力
   console.info(`Query: table=posts consumed=${posts.ConsumedCapacity.CapacityUnits}`);
 
   return {
@@ -48,32 +58,54 @@ module.exports.get = async (event) => {
   };
 };
 
+// POST /
+// 投稿API
+// JSONでうけつけ、bodyをメッセージ本文としてDynamoDBに登録する。
 module.exports.post = async (event) => {
   const userinfo = await getUserinfo(event);
+  const request = await parser.parse(event);
+  console.log(JSON.stringify(request));
 
-  let payload;
-  try {
-    payload = JSON.parse(event?.body);
-  } catch (error) {
-    console.error(error);
-  }
-  const body = payload?.body;
+  const body = request?.body;
 
-  if (body.length === 0) {
+  if (!body?.length) {
     return {
-      statusCode: 400 // Bad Request
+      statusCode: 400, // Bad Request
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({event, userinfo}, null, 2),
     };
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+
+  // 画像がある場合はS3に保存
+  let imageUrl;
+  if (request.files.length > 0) {
+    const imageFilename = `${userinfo.name}_${timestamp}`;
+    await s3.putObject({
+      Bucket: imageBucketName,
+      Key: imageFilename,
+      Body: request.files[0].content,
+      ContentType: 'image/jpeg',
+      ACL: 'public-read',
+    }).promise();
+    imageUrl = `https://${imageBucketName}.s3-ap-northeast-1.amazonaws.com/${imageFilename}`;
   }
 
   const result = await dynamodb.put({
     TableName: 'posts',
     Item: {
       username: userinfo.name,
-      created_at: (Date.now() / 1000),
+      created_at: timestamp,
       body,
+      imageUrl,
     },
     ReturnConsumedCapacity: 'INDEXES',
   }).promise();
+
+  // 消費したCapacityをログ出力
   console.info(`Query: table=posts consumed=${result.ConsumedCapacity.CapacityUnits}`);
 
   return {
@@ -81,6 +113,6 @@ module.exports.post = async (event) => {
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({event, userinfo}, null, 2),
+    body: JSON.stringify({event, userinfo, imageUrl}, null, 2),
   };
 };
