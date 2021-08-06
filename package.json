@@ -1,0 +1,10 @@
+{
+  "name": "sc2021b3-api",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "aws-sdk": "^2.962.0",
+    "node-fetch": "^2.6.1"
+  },
+  "license": "MIT"
+}
